@@ -1,0 +1,43 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: kube-gen-certs
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: kube-gen-certs
+        tier: security
+    spec:
+      containers:
+      - name: kube-gen-certs
+        image: docker.astuart.co:5000/kube-gen-certs
+        imagePullPolicy: Always
+        command:
+          - "go-wrapper"
+          - "run"
+          - "-incluster"
+          - "-ttl=288h"
+        resources:
+          requests:
+            cpu: 250m
+            memory: 500Mi
+        env:
+        - name: VAULT_ADDR
+          valueFrom:
+            configMapKeyRef:
+              name: vault
+              key: addr
+        - name: VAULT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: vault-creds
+              key: token
+        - name: ROOT_CA
+          valueFrom:
+            secretKeyRef:
+              name: stuart-ca
+              key: ca.crt
+        ports:
+        - containerPort: 8080
