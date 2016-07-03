@@ -141,25 +141,23 @@ func (ctr *certer) addTLSSecrets(ing *extensions.Ingress) (*extensions.Ingress, 
 		return nil, fmt.Errorf("No ingresses to update")
 	}
 
+	var err error
+
 	fmt.Println(ing.Name)
 
-	createNewSecret := false
-
-	if len(ing.Spec.TLS) < 1 {
-		createNewSecret = true
+	if *forceTLS {
 		ing.Spec.TLS = []extensions.IngressTLS{}
-
 		for _, rule := range ing.Spec.Rules {
 			ing.Spec.TLS = append(ing.Spec.TLS, extensions.IngressTLS{
 				Hosts:      []string{rule.Host},
 				SecretName: rule.Host + ".tls",
 			})
 		}
-	}
 
-	_, err := ctr.api.Extensions().Ingress(ing.Namespace).Update(ing)
-	if err != nil {
-		return nil, fmt.Errorf("Error updating ingress %s/%s: %s", ing.Namespace, ing.Name, err)
+		ing, err := ctr.api.Extensions().Ingress(ing.Namespace).Update(ing)
+		if err != nil {
+			return nil, fmt.Errorf("Error updating ingress %s/%s: %s", ing.Namespace, ing.Name, err)
+		}
 	}
 
 	for _, tls := range ing.Spec.TLS {
@@ -167,10 +165,13 @@ func (ctr *certer) addTLSSecrets(ing *extensions.Ingress) (*extensions.Ingress, 
 			continue
 		}
 
-		sec, err := ctr.api.Secrets(ing.Namespace).Get(tls.SecretName)
+		var sec *api.Secret
+		var newSec bool
+
+		sec, err = ctr.api.Secrets(ing.Namespace).Get(tls.SecretName)
 		if err != nil {
+			newSec = true
 			log.Println("Error getting secret", tls.SecretName, err)
-			createNewSecret = true
 			sec = &api.Secret{
 				ObjectMeta: api.ObjectMeta{
 					Namespace: ing.Namespace,
@@ -191,15 +192,18 @@ func (ctr *certer) addTLSSecrets(ing *extensions.Ingress) (*extensions.Ingress, 
 
 		sec.Data["tls.key"] = m.Private
 		sec.Data["tls.crt"] = m.Public
+		var op string
 
-		if createNewSecret {
-			_, err = ctr.api.Secrets(ing.Namespace).Create(sec)
+		if newSec {
+			op = "creating"
+			sec, err = ctr.api.Secrets(ing.Namespace).Create(sec)
 		} else {
-			_, err = ctr.api.Secrets(ing.Namespace).Update(sec)
+			op = "updating"
+			sec, err = ctr.api.Secrets(ing.Namespace).Update(sec)
 		}
 
 		if err != nil {
-			return nil, fmt.Errorf("Error writing secret %s: %s", sec.Name, err)
+			return nil, fmt.Errorf("Error %s secret %s: %s", op, sec.Name, err)
 		}
 	}
 
@@ -234,7 +238,7 @@ func (ctr *certer) watchIng() {
 
 		_, err = ctr.addTLSSecrets(i)
 		if err != nil {
-			log.Println("Error adding secret for new/updated ingress: %s/%s: %s", i.Namespace, i.Name, err)
+			log.Printf("Error adding secret for new/updated ingress: %s/%s: %s", i.Namespace, i.Name, err)
 		}
 	}
 }
