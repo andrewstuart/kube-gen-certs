@@ -1,12 +1,9 @@
 package main
 
 import (
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"time"
@@ -24,10 +21,16 @@ import (
 	"k8s.io/kubernetes/pkg/watch"
 )
 
+const (
+	backendLE    = "letsencrypt"
+	backendVault = "vault"
+)
+
 var (
 	inCluster = flag.Bool("incluster", false, "the client is running inside a kuberenetes cluster")
 	ttl       = flag.String("ttl", "240h", "the time to live for certificates")
 	forceTLS  = flag.Bool("forcetls", false, "force all ingresses to use TLS")
+	backend   = flag.String("backend", "letsencrypt", fmt.Sprintf("the backend to use for certificates. One of: %s, %s", backendLE, backendVault))
 )
 
 func init() {
@@ -55,45 +58,17 @@ func main() {
 		}
 	} else {
 		config = &restclient.Config{
-			Host: "http://desk.astuart.co:8080",
+			Host: os.Getenv("KUBE_API_HOST"),
 		}
 	}
 
-	ttl, err := time.ParseDuration(*ttl)
-	if err != nil {
-		log.Fatal(err)
-	}
+	var crt vpki.Certifier
 
-	vc := &vpki.Client{
-		Addr:     os.Getenv("VAULT_ADDR"),
-		Email:    "andrew.stuart2@gmail.com",
-		Mount:    "pki",
-		Role:     "astuart",
-		Strength: 2048,
-		TTL:      ttl,
-	}
-
-	log.Println(os.Getenv("ROOT_CA"))
-	if os.Getenv("ROOT_CA") != "" {
-		cp := x509.NewCertPool()
-		cp.AppendCertsFromPEM([]byte(os.Getenv("ROOT_CA")))
-		vc.HTTPClient = &http.Client{
-			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{RootCAs: cp},
-			},
-		}
-	}
-
-	switch {
-	case os.Getenv("VAULT_TOKEN") != "":
-		log.Println("Token:", os.Getenv("VAULT_TOKEN"))
-		vc.SetToken(os.Getenv("VAULT_TOKEN"))
-	default:
-		bs, err := ioutil.ReadFile("~/.vault-token")
-		if err != nil {
-			log.Fatal(err)
-		}
-		vc.SetToken(string(bs))
+	switch *backend {
+	case backendLE:
+		crt = getLECertifier()
+	case backendVault:
+		crt = getVaultCertifier()
 	}
 
 	cli, err := unversioned.New(config)
@@ -101,7 +76,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	ctr := &certer{c: vc, api: cli}
+	ctr := &certer{c: crt, api: cli}
 
 	go ctr.watchIng()
 

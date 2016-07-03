@@ -20,6 +20,7 @@ spec:
           - "-incluster"
           - "-forcetls"
           - "-ttl=288h"
+          - "-backend=letsencrypt"
         resources:
           requests:
             cpu: 250m
@@ -40,5 +41,7 @@ spec:
             secretKeyRef:
               name: stuart-ca
               key: ca.crt
+        - name: EMAIL
+          value: "andrew.stuart2@gmail.com"
         ports:
         - containerPort: 8080
