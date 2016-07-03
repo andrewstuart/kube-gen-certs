@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"crypto/x509"
 	"flag"
 	"fmt"
@@ -15,6 +16,7 @@ import (
 	_ "net/http/pprof"
 
 	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/apis/extensions"
 	"k8s.io/kubernetes/pkg/client/restclient"
 	"k8s.io/kubernetes/pkg/client/unversioned"
 )
@@ -22,6 +24,7 @@ import (
 var (
 	inCluster = flag.Bool("incluster", false, "the client is running inside a kuberenetes cluster")
 	ttl       = flag.String("ttl", "240h", "the time to live for certificates")
+	forceTLS  = flag.Bool("forcetls", false, "force all ingresses to use TLS")
 )
 
 func init() {
@@ -31,13 +34,10 @@ func init() {
 func main() {
 	var config *restclient.Config
 
-	cp := x509.NewCertPool()
-	cp.AppendCertsFromPEM([]byte(os.Getenv("ROOT_CA")))
-
-	http.DefaultClient.Transport.(*http.Transport).TLSClientConfig.RootCAs = cp
-
 	// PPROF server
 	go http.ListenAndServe(":8080", nil)
+
+	log.Println(*ttl, *inCluster)
 
 	if *inCluster {
 		var err error
@@ -65,8 +65,20 @@ func main() {
 		TTL:      ttl,
 	}
 
+	log.Println(os.Getenv("ROOT_CA"))
+	if os.Getenv("ROOT_CA") != "" {
+		cp := x509.NewCertPool()
+		cp.AppendCertsFromPEM([]byte(os.Getenv("ROOT_CA")))
+		vc.HTTPClient = &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{RootCAs: cp},
+			},
+		}
+	}
+
 	switch {
 	case os.Getenv("VAULT_TOKEN") != "":
+		log.Println("Token:", os.Getenv("VAULT_TOKEN"))
 		vc.SetToken(os.Getenv("VAULT_TOKEN"))
 	default:
 		bs, err := ioutil.ReadFile("~/.vault-token")
@@ -97,39 +109,55 @@ func main() {
 			}
 
 			for _, ing := range li.Items {
-				if len(ing.Spec.TLS) > 0 {
-					fmt.Println(ing.Name)
+				if len(ing.Spec.TLS) == 0 && !*forceTLS {
+					continue
+				}
 
-					for _, tls := range ing.Spec.TLS {
-						if len(tls.Hosts) < 1 {
-							continue
-						}
+				fmt.Println(ing.Name)
 
-						m, err := vpki.RawCert(vc, tls.Hosts[0])
-						if err != nil {
-							log.Println("Error getting raw certificate", err)
-							continue
-						}
+				if len(ing.Spec.TLS) < 1 {
+					newT := extensions.IngressTLS{
+						Hosts:      []string{ing.Spec.Rules[0].Host},
+						SecretName: ing.Spec.Rules[0].Host + ".tls",
+					}
+					ing.Spec.TLS = []extensions.IngressTLS{newT}
+				}
 
-						sec, err := cli.Secrets(n.Name).Get(tls.SecretName)
-						if err != nil {
-							log.Println("Error getting secret", tls.SecretName, err)
-							continue
-						}
+				_, err = cli.Extensions().Ingress(n.Name).Update(&ing)
+				if err != nil {
+					log.Println(err)
+					continue
+				}
 
-						log.Println(string(m.Public))
-
-						sec.Data["tls.key"] = m.Private
-						sec.Data["tls.crt"] = m.Public
-
-						_, err = cli.Secrets(n.Name).Update(sec)
-						if err != nil {
-							log.Println("Error updating secret", sec.Name, err)
-						}
+				for _, tls := range ing.Spec.TLS {
+					if len(tls.Hosts) < 1 {
+						continue
 					}
 
-					fmt.Println(ing.Spec.TLS)
+					m, err := vpki.RawCert(vc, tls.Hosts[0])
+					if err != nil {
+						log.Println("Error getting raw certificate", err)
+						continue
+					}
+
+					sec, err := cli.Secrets(n.Name).Get(tls.SecretName)
+					if err != nil {
+						log.Println("Error getting secret", tls.SecretName, err)
+						continue
+					}
+
+					log.Println(string(m.Public))
+
+					sec.Data["tls.key"] = m.Private
+					sec.Data["tls.crt"] = m.Public
+
+					_, err = cli.Secrets(n.Name).Update(sec)
+					if err != nil {
+						log.Println("Error updating secret", sec.Name, err)
+					}
 				}
+
+				fmt.Println(ing.Spec.TLS)
 			}
 
 			//LF

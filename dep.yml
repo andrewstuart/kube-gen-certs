@@ -18,7 +18,8 @@ spec:
           - "go-wrapper"
           - "run"
           - "-incluster"
-          - "-ttl=288h"
+          - "-forcetls"
+          - "-ttl=5m"
         resources:
           requests:
             cpu: 250m
