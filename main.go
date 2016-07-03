@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -19,6 +20,8 @@ import (
 	"k8s.io/kubernetes/pkg/apis/extensions"
 	"k8s.io/kubernetes/pkg/client/restclient"
 	"k8s.io/kubernetes/pkg/client/unversioned"
+	"k8s.io/kubernetes/pkg/runtime"
+	"k8s.io/kubernetes/pkg/watch"
 )
 
 var (
@@ -29,6 +32,11 @@ var (
 
 func init() {
 	flag.Parse()
+}
+
+type certer struct {
+	c   vpki.Certifier
+	api *unversioned.Client
 }
 
 func main() {
@@ -93,6 +101,10 @@ func main() {
 		log.Fatal(err)
 	}
 
+	ctr := &certer{c: vc, api: cli}
+
+	go ctr.watchIng()
+
 	for {
 		ns, err := cli.Namespaces().List(api.ListOptions{})
 		if err != nil {
@@ -109,55 +121,10 @@ func main() {
 			}
 
 			for _, ing := range li.Items {
-				if len(ing.Spec.TLS) == 0 && !*forceTLS {
-					continue
-				}
-
-				fmt.Println(ing.Name)
-
-				if len(ing.Spec.TLS) < 1 {
-					newT := extensions.IngressTLS{
-						Hosts:      []string{ing.Spec.Rules[0].Host},
-						SecretName: ing.Spec.Rules[0].Host + ".tls",
-					}
-					ing.Spec.TLS = []extensions.IngressTLS{newT}
-				}
-
-				_, err = cli.Extensions().Ingress(n.Name).Update(&ing)
+				_, err := ctr.addTLSSecrets(&ing)
 				if err != nil {
 					log.Println(err)
-					continue
 				}
-
-				for _, tls := range ing.Spec.TLS {
-					if len(tls.Hosts) < 1 {
-						continue
-					}
-
-					m, err := vpki.RawCert(vc, tls.Hosts[0])
-					if err != nil {
-						log.Println("Error getting raw certificate", err)
-						continue
-					}
-
-					sec, err := cli.Secrets(n.Name).Get(tls.SecretName)
-					if err != nil {
-						log.Println("Error getting secret", tls.SecretName, err)
-						continue
-					}
-
-					log.Println(string(m.Public))
-
-					sec.Data["tls.key"] = m.Private
-					sec.Data["tls.crt"] = m.Public
-
-					_, err = cli.Secrets(n.Name).Update(sec)
-					if err != nil {
-						log.Println("Error updating secret", sec.Name, err)
-					}
-				}
-
-				fmt.Println(ing.Spec.TLS)
 			}
 
 			//LF
@@ -166,5 +133,108 @@ func main() {
 
 		// Sleep for 90% of the TTL before reissue
 		time.Sleep(time.Duration(0.9 * float64(ttl)))
+	}
+}
+
+func (ctr *certer) addTLSSecrets(ing *extensions.Ingress) (*extensions.Ingress, error) {
+	if len(ing.Spec.TLS) == 0 && !*forceTLS {
+		return nil, fmt.Errorf("No ingresses to update")
+	}
+
+	fmt.Println(ing.Name)
+
+	createNewSecret := false
+
+	if len(ing.Spec.TLS) < 1 {
+		createNewSecret = true
+		ing.Spec.TLS = []extensions.IngressTLS{}
+
+		for _, rule := range ing.Spec.Rules {
+			ing.Spec.TLS = append(ing.Spec.TLS, extensions.IngressTLS{
+				Hosts:      []string{rule.Host},
+				SecretName: rule.Host + ".tls",
+			})
+		}
+	}
+
+	_, err := ctr.api.Extensions().Ingress(ing.Namespace).Update(ing)
+	if err != nil {
+		return nil, fmt.Errorf("Error updating ingress %s/%s: %s", ing.Namespace, ing.Name, err)
+	}
+
+	for _, tls := range ing.Spec.TLS {
+		if len(tls.Hosts) < 1 {
+			continue
+		}
+
+		sec, err := ctr.api.Secrets(ing.Namespace).Get(tls.SecretName)
+		if err != nil {
+			log.Println("Error getting secret", tls.SecretName, err)
+			createNewSecret = true
+			sec = &api.Secret{
+				ObjectMeta: api.ObjectMeta{
+					Namespace: ing.Namespace,
+					Name:      tls.SecretName,
+				},
+				Data: map[string][]byte{},
+			}
+		}
+
+		h := tls.Hosts[0]
+		//TODO maybe do altnames here? The Ingress TLS struct is weirdly redundant.
+		m, err := vpki.RawCert(ctr.c, h)
+		if err != nil {
+			return nil, fmt.Errorf("Error getting raw certificate for %s: %s", h, err)
+		}
+
+		log.Println(string(m.Public))
+
+		sec.Data["tls.key"] = m.Private
+		sec.Data["tls.crt"] = m.Public
+
+		if createNewSecret {
+			_, err = ctr.api.Secrets(ing.Namespace).Create(sec)
+		} else {
+			_, err = ctr.api.Secrets(ing.Namespace).Update(sec)
+		}
+
+		if err != nil {
+			return nil, fmt.Errorf("Error writing secret %s: %s", sec.Name, err)
+		}
+	}
+
+	return ing, nil
+}
+
+func (ctr *certer) watchIng() {
+	w, err := ctr.api.Extensions().Ingress("").Watch(api.ListOptions{})
+	if err != nil {
+		log.Println("Watch error", err)
+		return
+	}
+
+	for evt := range w.ResultChan() {
+		et := watch.EventType(evt.Type)
+		if et != watch.Added && et != watch.Modified {
+			continue
+		}
+
+		originalObjJS, err := runtime.Encode(api.Codecs.LegacyCodec(), evt.Object)
+		if err != nil {
+			log.Println("Object decode error", err)
+			continue
+		}
+
+		i := &extensions.Ingress{}
+		err = json.Unmarshal(originalObjJS, i)
+		if err != nil {
+			log.Println("Ingress Unmarshal error", err)
+			continue
+		}
+
+		_, err = ctr.addTLSSecrets(i)
+		if err != nil {
+			log.Println("Error adding secret for new/updated ingress: %s/%s: %s", i.Namespace, i.Name, err)
+		}
 	}
 }

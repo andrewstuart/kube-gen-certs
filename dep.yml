@@ -19,7 +19,7 @@ spec:
           - "run"
           - "-incluster"
           - "-forcetls"
-          - "-ttl=5m"
+          - "-ttl=288h"
         resources:
           requests:
             cpu: 250m
