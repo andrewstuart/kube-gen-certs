@@ -12,12 +12,7 @@ import (
 	"go.astuart.co/vpki"
 )
 
-func getVaultCertifier() *vpki.Client {
-	ttlD, err := time.ParseDuration(*ttl)
-	if err != nil {
-		log.Fatal(err)
-	}
-
+func getVaultCertifier(ttlD time.Duration) *vpki.Client {
 	vc := &vpki.Client{
 		Addr:     os.Getenv("VAULT_ADDR"),
 		Email:    "andrew.stuart2@gmail.com",

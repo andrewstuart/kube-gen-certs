@@ -45,6 +45,11 @@ type certer struct {
 func main() {
 	var config *restclient.Config
 
+	ttlD, err := time.ParseDuration(*ttl)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	// PPROF server
 	go http.ListenAndServe(":8080", nil)
 
@@ -67,8 +72,10 @@ func main() {
 	switch *backend {
 	case backendLE:
 		crt = getLECertifier()
+		//LE TTL is 90 days
+		ttlD = 90 * 24 * time.Hour
 	case backendVault:
-		crt = getVaultCertifier()
+		crt = getVaultCertifier(ttlD)
 	}
 
 	cli, err := unversioned.New(config)
@@ -107,7 +114,7 @@ func main() {
 		}
 
 		// Sleep for 90% of the TTL before reissue
-		time.Sleep(time.Duration(0.9 * float64(ttl)))
+		time.Sleep(time.Duration(0.9 * float64(ttlD)))
 	}
 }
 
