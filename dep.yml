@@ -16,8 +16,7 @@ spec:
         image: docker.astuart.co:5000/kube-gen-certs
         imagePullPolicy: Always
         command:
-          - "go-wrapper"
-          - "run"
+          - "/kube-gen-certs"
           - "-incluster"
           - "-forcetls"
           - "-ttl=288h"
