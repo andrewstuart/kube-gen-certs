@@ -4,6 +4,8 @@ import (
 	"log"
 	"os"
 
+	"go.astuart.co/vpki"
+
 	"rsc.io/letsencrypt"
 )
 
@@ -14,6 +16,10 @@ func getLECertifier() *letsencrypt.Manager {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	go func() {
+		log.Fatal(vpki.ListenAndServeTLS(":8443", nil, m))
+	}()
 
 	return m
 }

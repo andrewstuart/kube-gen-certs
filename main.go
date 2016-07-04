@@ -167,7 +167,8 @@ func (ctr *certer) addTLSSecrets(ing *extensions.Ingress) (*extensions.Ingress, 
 		//TODO maybe do altnames here? The Ingress TLS struct is weirdly redundant.
 		m, err := vpki.RawCert(ctr.c, h)
 		if err != nil {
-			return nil, fmt.Errorf("Error getting raw certificate for %s: %s", h, err)
+			log.Printf("Error getting raw certificate for %s: %s", h, err)
+			continue
 		}
 
 		log.Println(string(m.Public))
@@ -185,7 +186,7 @@ func (ctr *certer) addTLSSecrets(ing *extensions.Ingress) (*extensions.Ingress, 
 		}
 
 		if err != nil {
-			return nil, fmt.Errorf("Error %s secret %s: %s", op, sec.Name, err)
+			log.Printf("Error %s secret %s: %s", op, sec.Name, err)
 		}
 	}
 
