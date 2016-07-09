@@ -3,15 +3,38 @@ package main
 import (
 	"fmt"
 	"log"
+	"strings"
 
-	"go.astuart.co/vpki"
+	"github.com/prometheus/client_golang/prometheus"
+
+	"astuart.co/vpki"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/apis/extensions"
 )
 
+const (
+	annBackend         = "kube-gen-certs.astuart.co/backend"
+	annRequestGenerate = "kube-gen-certs.astuart.co/autogenerate"
+)
+
+func getRegDom(h string) string {
+	spl := strings.Split(h, ".")
+	if len(spl) < 2 {
+		return h
+	}
+	return strings.Join(spl[len(spl)-2:], ".")
+}
+
 func (ctr *certer) addTLSSecrets(ing *extensions.Ingress) (*extensions.Ingress, error) {
 	if len(ing.Spec.TLS) == 0 && !*forceTLS {
 		return nil, fmt.Errorf("No ingresses to update")
+	}
+
+	if ctr.hf != nil {
+		err := ctr.hf(ing)
+		if err != nil {
+			log.Println("Error handling ingress", err)
+		}
 	}
 
 	var err error
@@ -62,6 +85,9 @@ func (ctr *certer) addTLSSecrets(ing *extensions.Ingress) (*extensions.Ingress, 
 				ObjectMeta: api.ObjectMeta{
 					Namespace: ing.Namespace,
 					Name:      tls.SecretName,
+					Annotations: map[string]string{
+						annBackend: *backend,
+					},
 				},
 				Data: map[string][]byte{},
 			}
@@ -70,13 +96,19 @@ func (ctr *certer) addTLSSecrets(ing *extensions.Ingress) (*extensions.Ingress, 
 		h := tls.Hosts[0]
 		//TODO maybe do altnames here? The Ingress TLS struct is weirdly redundant.
 		m, err := vpki.RawCert(ctr.c, h)
+
 		if err != nil {
+			certErrInc(ing)
 			log.Printf("Error getting raw certificate for %s: %s", h, err)
 			continue
 		}
+		certGen.With(prometheus.Labels{"ttl": *ttl, "registered_domain": getRegDom(h)}).Inc()
 
-		log.Println(string(m.Public))
+		if sec.ObjectMeta.Annotations == nil {
+			sec.ObjectMeta.Annotations = map[string]string{}
+		}
 
+		sec.ObjectMeta.Annotations[annBackend] = "true"
 		sec.Data["tls.key"] = m.Private
 		sec.Data["tls.crt"] = m.Public
 		var op string

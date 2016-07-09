@@ -4,7 +4,7 @@ import (
 	"log"
 	"os"
 
-	"go.astuart.co/vpki"
+	"astuart.co/vpki"
 
 	"rsc.io/letsencrypt"
 )
@@ -16,6 +16,9 @@ func getLECertifier() *letsencrypt.Manager {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	//TODO set an ingress update handler??
+	//TODO create a service to route to us
 
 	go func() {
 		log.Fatal(vpki.ListenAndServeTLS(":8443", nil, m))

@@ -9,7 +9,7 @@ import (
 	"os"
 	"time"
 
-	"go.astuart.co/vpki"
+	"astuart.co/vpki"
 )
 
 func getVaultCertifier(ttlD time.Duration) *vpki.Client {
@@ -35,7 +35,6 @@ func getVaultCertifier(ttlD time.Duration) *vpki.Client {
 
 	switch {
 	case os.Getenv("VAULT_TOKEN") != "":
-		log.Println("Token:", os.Getenv("VAULT_TOKEN"))
 		vc.SetToken(os.Getenv("VAULT_TOKEN"))
 	default:
 		bs, err := ioutil.ReadFile("~/.vault-token")

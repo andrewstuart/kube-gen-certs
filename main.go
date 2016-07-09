@@ -7,12 +7,14 @@ import (
 	"os"
 	"time"
 
-	"go.astuart.co/vpki"
+	"github.com/prometheus/client_golang/prometheus"
+
+	"astuart.co/vpki"
 
 	"net/http"
-	_ "net/http/pprof"
 
 	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/apis/extensions"
 	"k8s.io/kubernetes/pkg/client/restclient"
 	"k8s.io/kubernetes/pkg/client/unversioned"
 )
@@ -27,15 +29,36 @@ var (
 	ttl       = flag.String("ttl", "240h", "the time to live for certificates")
 	forceTLS  = flag.Bool("forcetls", false, "force all ingresses to use TLS")
 	backend   = flag.String("backend", "letsencrypt", fmt.Sprintf("the backend to use for certificates. One of: %s, %s", backendLE, backendVault))
+
+	certGen = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "cert_generated",
+		Help: "The number of certificates kubernetes has generated",
+	}, []string{"registered_domain", "ttl"})
+
+	certErrors = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "cert_errors",
+		Help: "The number of certificate requests that have resulted in errors",
+	}, []string{"ingress", "namespace", "ttl"})
 )
 
+func certErrInc(ing *extensions.Ingress) {
+	certErrors.With(prometheus.Labels{
+		"ingress":   ing.Name,
+		"namespace": ing.Namespace,
+		"ttl":       *ttl,
+	}).Inc()
+}
+
 func init() {
+	prometheus.MustRegisterAll(certGen, certErrors)
 	flag.Parse()
 }
 
 type certer struct {
 	c   vpki.Certifier
 	api *unversioned.Client
+
+	hf func(*extensions.Ingress) error
 }
 
 func main() {
@@ -46,8 +69,10 @@ func main() {
 		log.Fatal(err)
 	}
 
+	http.Handle("/metrics", prometheus.Handler())
+
 	// PPROF server
-	go http.ListenAndServe(":8080", nil)
+	go http.ListenAndServe(":8080", prometheus.InstrumentHandler("default", http.DefaultServeMux))
 
 	log.Println(*ttl, *inCluster)
 
@@ -81,9 +106,13 @@ func main() {
 
 	ctr := &certer{c: crt, api: cli}
 
-	watching := false
+	// Start watching, which will also do the initial issuance.
+	go ctr.watchIng()
 
 	for {
+		// Sleep for 90% of the TTL before reissue
+		time.Sleep(time.Duration(0.9 * float64(ttlD)))
+
 		ns, err := cli.Namespaces().List(api.ListOptions{})
 		if err != nil {
 			log.Fatal(err)
@@ -101,7 +130,8 @@ func main() {
 			for _, ing := range li.Items {
 				_, err := ctr.addTLSSecrets(&ing)
 				if err != nil {
-					log.Println(err)
+					certErrInc(&ing)
+					log.Println("Error adding TlS secret", err)
 				}
 			}
 
@@ -109,11 +139,5 @@ func main() {
 			fmt.Println()
 		}
 
-		if !watching {
-			watching = true
-			go ctr.watchIng()
-		}
-		// Sleep for 90% of the TTL before reissue
-		time.Sleep(time.Duration(0.9 * float64(ttlD)))
 	}
 }
