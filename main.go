@@ -9,9 +9,10 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"strings"
 	"time"
 
-	"go.astuart.co/vpki"
+	"astuart.co/vpki"
 
 	"net/http"
 	_ "net/http/pprof"
@@ -87,7 +88,7 @@ func main() {
 	switch {
 	case os.Getenv("VAULT_TOKEN") != "":
 		log.Println("Token:", os.Getenv("VAULT_TOKEN"))
-		vc.SetToken(os.Getenv("VAULT_TOKEN"))
+		vc.SetToken(strings.TrimSpace(os.Getenv("VAULT_TOKEN")))
 	default:
 		bs, err := ioutil.ReadFile("~/.vault-token")
 		if err != nil {
@@ -106,6 +107,9 @@ func main() {
 	go ctr.watchIng()
 
 	for {
+		// Sleep for 90% of the TTL before reissue
+		time.Sleep(time.Duration(0.9 * float64(ttl)))
+
 		ns, err := cli.Namespaces().List(api.ListOptions{})
 		if err != nil {
 			log.Fatal(err)
@@ -130,9 +134,6 @@ func main() {
 			//LF
 			fmt.Println()
 		}
-
-		// Sleep for 90% of the TTL before reissue
-		time.Sleep(time.Duration(0.9 * float64(ttl)))
 	}
 }
 
@@ -213,7 +214,7 @@ func (ctr *certer) addTLSSecrets(ing *extensions.Ingress) (*extensions.Ingress, 
 func (ctr *certer) watchIng() {
 	w, err := ctr.api.Extensions().Ingress("").Watch(api.ListOptions{})
 	if err != nil {
-		log.Println("Watch error", err)
+		log.Fatal("Watch error", err)
 		return
 	}
 
