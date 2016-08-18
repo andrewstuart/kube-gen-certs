@@ -10,11 +10,13 @@ spec:
         app: kube-gen-certs
         tier: security
     spec:
+      terminationGracePeriodSeconds: 0
       containers:
       - name: kube-gen-certs
         image: docker.astuart.co:5000/kube-gen-certs
         imagePullPolicy: Always
-        args:
+        command:
+          - "/kube-gen-certs"
           - "-incluster"
           - "-forcetls"
           - "-ttl=288h"
