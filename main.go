@@ -21,7 +21,6 @@ import (
 	"k8s.io/kubernetes/pkg/apis/extensions"
 	"k8s.io/kubernetes/pkg/client/restclient"
 	"k8s.io/kubernetes/pkg/client/unversioned"
-	"k8s.io/kubernetes/pkg/runtime"
 	"k8s.io/kubernetes/pkg/watch"
 )
 
@@ -29,6 +28,7 @@ var (
 	inCluster = flag.Bool("incluster", false, "the client is running inside a kuberenetes cluster")
 	ttl       = flag.String("ttl", "240h", "the time to live for certificates")
 	forceTLS  = flag.Bool("forcetls", false, "force all ingresses to use TLS")
+	role      = flag.String("vault-role", "vault", "the vault role to use when obtaining certs")
 )
 
 func init() {
@@ -69,7 +69,7 @@ func main() {
 		Addr:     os.Getenv("VAULT_ADDR"),
 		Email:    "andrew.stuart2@gmail.com",
 		Mount:    "pki",
-		Role:     "astuart",
+		Role:     *role,
 		Strength: 2048,
 		TTL:      ttl,
 	}
@@ -107,6 +107,7 @@ func main() {
 	go ctr.watchIng()
 
 	for {
+		// Initial watch receives all current ingresses; we only need to renew
 		// Sleep for 90% of the TTL before reissue
 		time.Sleep(time.Duration(0.9 * float64(ttl)))
 
@@ -226,22 +227,14 @@ func (ctr *certer) watchIng() {
 				continue
 			}
 
-			originalObjJS, err := runtime.Encode(api.Codecs.LegacyCodec(), evt.Object)
-			if err != nil {
-				log.Println("Object decode error", err)
-				continue
-			}
-
-			i := &extensions.Ingress{}
-			err = json.Unmarshal(originalObjJS, i)
-			if err != nil {
-				log.Println("Ingress Unmarshal error", err)
-				continue
-			}
-
-			_, err = ctr.addTLSSecrets(i)
-			if err != nil {
-				log.Printf("Error adding secret for new/updated ingress: %s/%s: %s", i.Namespace, i.Name, err)
+			switch o := evt.Object.(type) {
+			case *extensions.Ingress:
+				_, err = ctr.addTLSSecrets(o)
+				if err != nil {
+					log.Printf("Error adding secret for new/updated ingress: %s/%s: %s", o.Namespace, o.Name, err)
+				}
+			default:
+				log.Println(json.NewEncoder(os.Stdout).Encode(o))
 			}
 		}
 

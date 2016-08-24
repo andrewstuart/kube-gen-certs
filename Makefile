@@ -5,8 +5,11 @@ IMAGE=kube-gen-certs
 
 TAG=$(REG)/$(IMAGE)
 
-build:
-	go build
+$(IMAGE): *.go
+	go build -o $(IMAGE)
+
+build: $(IMAGE)
+	-upx $(IMAGE)
 	docker build -t $(TAG) .
 
 push: build
