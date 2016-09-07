@@ -24,6 +24,7 @@ import (
 var (
 	inCluster = flag.Bool("incluster", false, "the client is running inside a kuberenetes cluster")
 	ttl       = flag.String("ttl", "240h", "the time to live for certificates")
+	forceTLS  = flag.Bool("forcetls", false, "force all ingresses to use TLS if certs can be obtained")
 	role      = flag.String("vault-role", "vault", "the vault role to use when obtaining certs")
 )
 

@@ -19,6 +19,7 @@ spec:
         command:
           - "/kube-gen-certs"
           - "-incluster"
+          - "-forcetls"
           - "-ttl=288h"
         resources:
           requests:
