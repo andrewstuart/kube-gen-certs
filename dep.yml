@@ -1,6 +1,7 @@
 apiVersion: extensions/v1beta1
 kind: Deployment
 metadata:
+  namespace: kube-systme
   name: kube-gen-certs
 spec:
   replicas: 1
@@ -13,12 +14,11 @@ spec:
       terminationGracePeriodSeconds: 0
       containers:
       - name: kube-gen-certs
-        image: docker.astuart.co:5000/kube-gen-certs
+        image: docker.astuart.co:5000/kube-gen-certs #Substitute your registry here
         imagePullPolicy: Always
         command:
           - "/kube-gen-certs"
           - "-incluster"
-          - "-forcetls"
           - "-ttl=288h"
         resources:
           requests:
@@ -38,7 +38,7 @@ spec:
         - name: ROOT_CA
           valueFrom:
             secretKeyRef:
-              name: stuart-ca
+              name: ca
               key: ca.crt
         ports:
         - containerPort: 8080

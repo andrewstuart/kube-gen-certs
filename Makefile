@@ -1,11 +1,12 @@
-REG=docker.astuart.co:5000
-IMAGE=kube-gen-certs
+REG=andrewstuart
+IMAGE := $(shell basename $(PWD))
 
 .PHONY: build push deploy
 
 TAG=$(REG)/$(IMAGE)
 
 $(IMAGE): *.go
+	go get
 	go build -o $(IMAGE)
 
 build: $(IMAGE)
