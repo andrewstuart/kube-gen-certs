@@ -1,6 +1,5 @@
 # kube-gen-certs
-## Generate kubernetes certificates automatically for your ingresses using
-## Vault's PKI functionality
+## Generate kubernetes certificates automatically for your ingresses using Vault's PKI functionality
 
 ### Usage
 ```bash
