@@ -1,7 +1,7 @@
 # kube-gen-certs
 ## Generate kubernetes certificates automatically for your ingresses using Vault's PKI functionality
 
-### Usage
+### Cluster deployment
 ```bash
 $ make push REG="http://docker.astuart.co:5000" # e.g.
 

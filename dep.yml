@@ -14,7 +14,7 @@ spec:
       terminationGracePeriodSeconds: 0
       containers:
       - name: kube-gen-certs
-        image: docker.astuart.co:5000/kube-gen-certs #Substitute your registry here
+        image: andrewstuart/kube-gen-certs #Substitute your registry here
         imagePullPolicy: Always
         command:
           - "/kube-gen-certs"
