@@ -9,7 +9,7 @@ $(IMAGE): *.go
 	go get
 	go build -o $(IMAGE)
 
-build: $(IMAGE)
+build:
 	-upx $(IMAGE)
 	docker build -t $(TAG) .
 
