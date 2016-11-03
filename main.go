@@ -16,16 +16,17 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 
-	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/client/restclient"
-	"k8s.io/kubernetes/pkg/client/unversioned"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/pkg/api/v1"
+	"k8s.io/client-go/rest"
 )
 
 var (
-	inCluster = flag.Bool("incluster", false, "the client is running inside a kuberenetes cluster")
-	ttl       = flag.String("ttl", "240h", "the time to live for certificates")
-	forceTLS  = flag.Bool("forcetls", false, "force all ingresses to use TLS if certs can be obtained")
-	role      = flag.String("vault-role", "vault", "the vault role to use when obtaining certs")
+	inCluster  = flag.Bool("incluster", false, "the client is running inside a kuberenetes cluster")
+	ttl        = flag.String("ttl", "240h", "the time to live for certificates")
+	forceTLS   = flag.Bool("forcetls", false, "force all ingresses to use TLS if certs can be obtained")
+	role       = flag.String("vault-role", "vault", "the vault role to use when obtaining certs")
+	selfSigned = flag.Bool("self-signed", false, "self-sign all certificates")
 )
 
 func init() {
@@ -34,25 +35,22 @@ func init() {
 
 type certer struct {
 	c   vpki.Certifier
-	api *unversioned.Client
+	api *kubernetes.Clientset
 }
 
 func main() {
-	var config *restclient.Config
-
-	// PPROF server
-	go http.ListenAndServe(":8080", nil)
+	var config *rest.Config
 
 	log.Println(*ttl, *inCluster)
 
 	if *inCluster {
 		var err error
-		config, err = restclient.InClusterConfig()
+		config, err = rest.InClusterConfig()
 		if err != nil {
 			log.Fatal(err)
 		}
 	} else {
-		config = &restclient.Config{
+		config = &rest.Config{
 			Host: "http://desk.astuart.co:8080",
 		}
 	}
@@ -83,24 +81,32 @@ func main() {
 		}
 	}
 
-	switch {
-	case os.Getenv("VAULT_TOKEN") != "":
-		log.Println("Token:", os.Getenv("VAULT_TOKEN"))
-		vc.SetToken(strings.TrimSpace(os.Getenv("VAULT_TOKEN")))
-	default:
-		bs, err := ioutil.ReadFile("~/.vault-token")
-		if err != nil {
-			log.Fatal(err)
+	var ctr *certer
+
+	if !*selfSigned {
+		switch {
+		case os.Getenv("VAULT_TOKEN") != "":
+			log.Println("Token:", os.Getenv("VAULT_TOKEN"))
+			vc.SetToken(strings.TrimSpace(os.Getenv("VAULT_TOKEN")))
+		default:
+			bs, err := ioutil.ReadFile("~/.vault-token")
+			if err != nil {
+				log.Fatal(err)
+			}
+			vc.SetToken(string(bs))
 		}
-		vc.SetToken(string(bs))
 	}
 
-	cli, err := unversioned.New(config)
+	cli, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	ctr := &certer{c: vc, api: cli}
+	if !*selfSigned {
+		ctr = &certer{c: vc, api: cli}
+	} else {
+		ctr = &certer{c: &vpki.RawMarshaler{&SelfSigner{ttl}}, api: cli}
+	}
 
 	go ctr.watchIng()
 
@@ -109,16 +115,16 @@ func main() {
 		// Sleep for 90% of the TTL before reissue
 		time.Sleep(time.Duration(0.9 * float64(ttl)))
 
-		ns, err := cli.Namespaces().List(api.ListOptions{})
+		ns, err := cli.Namespaces().List(v1.ListOptions{})
 		if err != nil {
 			log.Fatal(err)
 		}
 
 		for _, n := range ns.Items {
 			fmt.Println("Namespace", n.Name)
-			i := cli.Extensions().Ingress(n.Name)
+			i := cli.Ingresses(n.Name)
 
-			li, err := i.List(api.ListOptions{})
+			li, err := i.List(v1.ListOptions{})
 			if err != nil {
 				log.Fatal(err)
 			}
