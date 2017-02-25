@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"fmt"
 	"log"
 
@@ -55,17 +57,30 @@ func (ctr *certer) addTLSSecrets(ing *v1beta1.Ingress) (*v1beta1.Ingress, error)
 			}
 		}
 
-		h := tls.Hosts[0]
-		//TODO maybe do altnames here? The Ingress TLS struct is weirdly redundant.
-		m, err := vpki.RawCert(ctr.c, h)
-		if err != nil {
-			return nil, fmt.Errorf("error getting raw certificate for %s: %s", h, err)
+		var keyPair *vpki.RawPair
+
+		switch certer := ctr.c.(type) {
+		case *vpki.Client:
+			csr := &x509.CertificateRequest{
+				DNSNames: []string{},
+				Subject: pkix.Name{
+					CommonName: tls.Hosts[0],
+				},
+			}
+
+			keyPair, err = certer.GenCert(csr)
+		default:
+			keyPair, err = vpki.RawCert(certer, tls.Hosts[0])
 		}
 
-		log.Println(string(m.Public))
+		if err != nil {
+			return nil, fmt.Errorf("error getting raw certificate for secret %s: %s", tls.SecretName, err)
+		}
 
-		sec.Data["tls.key"] = m.Private
-		sec.Data["tls.crt"] = m.Public
+		log.Println(string(keyPair.Public))
+
+		sec.Data["tls.key"] = keyPair.Private
+		sec.Data["tls.crt"] = keyPair.Public
 		var op string
 
 		if newSec {

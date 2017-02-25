@@ -1,8 +1,8 @@
 hash: c274be54c4657b30f4e6c420cfa0de67516b7f1517793a994a7115e2dc432cf7
-updated: 2016-11-03T09:30:01.135378549-07:00
+updated: 2016-11-07T19:22:05.021116329-07:00
 imports:
 - name: astuart.co/vpki
-  version: e2df2e7c0e20f933b820788970b05fe9bcb0cc24
+  version: 072db212a7f22e33baf3ee0231cc68f5978a9f49
 - name: bitbucket.org/ww/goautoneg
   version: 75cd24fc2f2c2a2088577d12123ddee5f54e0675
 - name: cloud.google.com/go
@@ -89,7 +89,7 @@ imports:
   - json/scanner
   - json/token
 - name: github.com/hashicorp/vault
-  version: ebf4318daecbf3604461c79e940bb52c8113fec6
+  version: 22619b6786724c8eca5340a63395bf3058e1e3f7
   subpackages:
   - api
   - helper/compressutil
@@ -115,7 +115,7 @@ imports:
 - name: github.com/pborman/uuid
   version: ca53cad383cad2479bbba7f7a1a05797ec1386e4
 - name: github.com/prometheus/client_golang
-  version: e51041b3fa41cece0dca035740ba6411905be473
+  version: c5b7fccd204277076155f10851dad72b76a49317
   subpackages:
   - prometheus
 - name: github.com/prometheus/client_model
@@ -292,41 +292,24 @@ imports:
   - tools/metrics
   - transport
 - name: k8s.io/kubernetes
-  version: cfdaf18277e1ebaa28fcdaed1160a0243eb81be1
+  version: 42fe4ab0270e44c750d77c682e2fcab394aeb392
   subpackages:
-  - pkg/api
-  - pkg/api/meta
   - pkg/api/meta/metatypes
-  - pkg/api/resource
   - pkg/api/unversioned
-  - pkg/auth/user
   - pkg/conversion
   - pkg/conversion/queryparams
-  - pkg/fields
   - pkg/genericapiserver/openapi/common
   - pkg/labels
   - pkg/runtime
-  - pkg/runtime/serializer
-  - pkg/runtime/serializer/json
-  - pkg/runtime/serializer/protobuf
-  - pkg/runtime/serializer/recognizer
-  - pkg/runtime/serializer/versioning
   - pkg/selection
   - pkg/types
   - pkg/util/errors
-  - pkg/util/framer
-  - pkg/util/intstr
   - pkg/util/json
-  - pkg/util/labels
   - pkg/util/net
-  - pkg/util/rand
   - pkg/util/runtime
   - pkg/util/sets
-  - pkg/util/uuid
   - pkg/util/validation
-  - pkg/util/validation/field
   - pkg/util/wait
-  - pkg/util/yaml
   - pkg/watch
   - third_party/forked/golang/reflect
 testImports: []

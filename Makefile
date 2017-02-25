@@ -17,4 +17,4 @@ push: build
 	docker push $(TAG)
 
 deploy: push
-	kubectl delete po -l app=kube-gen-certs
+	kubectl --namespace system delete po -l app=kube-gen-certs
