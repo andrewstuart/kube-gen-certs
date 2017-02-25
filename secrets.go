@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/golang/glog"
+
 	"astuart.co/vpki"
 	"k8s.io/client-go/pkg/api/v1"
 	"k8s.io/client-go/pkg/apis/extensions/v1beta1"
@@ -46,8 +48,9 @@ func (ctr *certer) addTLSSecrets(ing *v1beta1.Ingress) (*v1beta1.Ingress, error)
 
 		sec, err = ctr.api.Secrets(ing.Namespace).Get(tls.SecretName)
 		if err != nil {
+			log.Printf("Error getting secret; creating new secret %s: %s\n", tls.SecretName, err)
+
 			newSec = true
-			log.Println("Error getting secret", tls.SecretName, err)
 			sec = &v1.Secret{
 				ObjectMeta: v1.ObjectMeta{
 					Namespace: ing.Namespace,
@@ -68,6 +71,8 @@ func (ctr *certer) addTLSSecrets(ing *v1beta1.Ingress) (*v1beta1.Ingress, error)
 				},
 			}
 
+			glog.Infof("Using certificate request %#v\n", csr)
+
 			keyPair, err = certer.GenCert(csr)
 		default:
 			keyPair, err = vpki.RawCert(certer, tls.Hosts[0])
@@ -77,7 +82,7 @@ func (ctr *certer) addTLSSecrets(ing *v1beta1.Ingress) (*v1beta1.Ingress, error)
 			return nil, fmt.Errorf("error getting raw certificate for secret %s: %s", tls.SecretName, err)
 		}
 
-		log.Println(string(keyPair.Public))
+		glog.V(5).Info(keyPair.Public)
 
 		sec.Data["tls.key"] = keyPair.Private
 		sec.Data["tls.crt"] = keyPair.Public
