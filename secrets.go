@@ -62,7 +62,7 @@ func (ctr *certer) addTLSSecrets(ing *v1beta1.Ingress) (*v1beta1.Ingress, error)
 		switch certer := ctr.c.(type) {
 		case *vpki.Client:
 			csr := &x509.CertificateRequest{
-				DNSNames: []string{},
+				DNSNames: tls.Hosts,
 				Subject: pkix.Name{
 					CommonName: tls.Hosts[0],
 				},
