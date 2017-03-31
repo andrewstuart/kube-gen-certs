@@ -1,6 +1,12 @@
 # kube-gen-certs
 ## Generate kubernetes certificates automatically for your ingresses using Vault's PKI functionality
 
+To have kube-gen-certs create your certificates automatically, either use the
+`-forcetls` option, or annotate your ingresses with `kubernetes.io/tls-vault: "true"`.
+
+`kube-gen-certs` will automatically add any tls certificates it does not find,
+and will update certificates as they are about to expire.
+
 ### Cluster deployment
 ```bash
 # Optional (hosted on docker hub)
