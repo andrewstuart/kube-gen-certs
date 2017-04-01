@@ -1,0 +1,66 @@
+hash: 40c55c33e940df97ef3fb005a49aa3ecccd9d01f5888f319647d94ee894111be
+updated: 2016-11-07T19:13:16.16339851-07:00
+imports:
+- name: bitbucket.org/ww/goautoneg
+  version: 75cd24fc2f2c2a2088577d12123ddee5f54e0675
+- name: github.com/beorn7/perks
+  version: 3ac7bf7a47d159a033b107610db8a1b6575507a4
+  subpackages:
+  - quantile
+- name: github.com/fatih/structs
+  version: dc3312cb1a4513a366c4c9e622ad55c32df12ed3
+- name: github.com/golang/protobuf
+  version: 8616e8ee5e20a1704615e6c8d7afcdac06087a67
+  subpackages:
+  - proto
+- name: github.com/hashicorp/errwrap
+  version: 7554cd9344cec97297fa6649b055a8c98c2a1e55
+- name: github.com/hashicorp/go-cleanhttp
+  version: ad28ea4487f05916463e2423a55166280e8254b5
+- name: github.com/hashicorp/go-multierror
+  version: 8c5f0ad9360406a3807ce7de6bc73269a91a6e51
+- name: github.com/hashicorp/go-rootcerts
+  version: 6bb64b370b90e7ef1fa532be9e591a81c3493e00
+- name: github.com/hashicorp/hcl
+  version: d8c773c4cba11b11539e3d45f93daeaa5dcf1fa1
+  subpackages:
+  - hcl/ast
+  - hcl/parser
+  - hcl/scanner
+  - hcl/strconv
+  - hcl/token
+  - json/parser
+  - json/scanner
+  - json/token
+- name: github.com/hashicorp/vault
+  version: 22619b6786724c8eca5340a63395bf3058e1e3f7
+  subpackages:
+  - api
+  - helper/compressutil
+  - helper/jsonutil
+- name: github.com/matttproud/golang_protobuf_extensions
+  version: fc2b8d3a73c4867e51861bbdd5ae3c1f0869dd6a
+  subpackages:
+  - pbutil
+- name: github.com/mitchellh/go-homedir
+  version: 756f7b183b7ab78acdbbee5c7f392838ed459dda
+- name: github.com/mitchellh/mapstructure
+  version: 740c764bc6149d3f1806231418adb9f52c11bcbf
+- name: github.com/prometheus/client_golang
+  version: c5b7fccd204277076155f10851dad72b76a49317
+  subpackages:
+  - prometheus
+- name: github.com/prometheus/client_model
+  version: fa8ad6fec33561be4280a8f0514318c79d7f6cb6
+  subpackages:
+  - go
+- name: github.com/prometheus/common
+  version: ffe929a3f4c4faeaa10f2b9535c2b1be3ad15650
+  subpackages:
+  - expfmt
+  - model
+- name: github.com/prometheus/procfs
+  version: 454a56f35412459b5e684fd5ec0f9211b94f002a
+- name: github.com/sethgrid/pester
+  version: 2a102734c18c43c74fd0664e06cd414cf9602b93
+testImports: []
