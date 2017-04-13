@@ -4,10 +4,9 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"fmt"
-	"log"
 	"time"
 
-	"github.com/golang/glog"
+	log "github.com/Sirupsen/logrus"
 
 	"astuart.co/vpki"
 	"k8s.io/client-go/pkg/api/v1"
@@ -41,14 +40,25 @@ func (ctr *certer) addTLSSecrets(ing *v1beta1.Ingress) (*v1beta1.Ingress, error)
 		var sec *v1.Secret
 		var newSec bool
 
-		sec, err = ctr.api.Secrets(ing.Namespace).Get(tls.SecretName)
+		namespace := ctr.namespace
+		if namespace == "" {
+			namespace = ing.Namespace
+		}
+
+		logger := log.WithFields(log.Fields{
+			"namespace": namespace,
+			"ingress":   fmt.Sprintf("%s/%s", ing.Namespace, ing.Name),
+			"secret":    tls.SecretName,
+		})
+
+		sec, err = ctr.api.Secrets(namespace).Get(tls.SecretName)
 		if err != nil {
-			log.Printf("Error getting secret; creating new secret %s: %s\n", tls.SecretName, err)
+			logger.Errorf("Error getting secret; creating new secret: %s", err)
 
 			newSec = true
 			sec = &v1.Secret{
 				ObjectMeta: v1.ObjectMeta{
-					Namespace: ing.Namespace,
+					Namespace: namespace,
 					Name:      tls.SecretName,
 				},
 				Data: map[string][]byte{},
@@ -74,7 +84,7 @@ func (ctr *certer) addTLSSecrets(ing *v1beta1.Ingress) (*v1beta1.Ingress, error)
 				},
 			}
 
-			glog.Infof("Using certificate request %#v\n", csr)
+			logger.Debug("Using certificate request %#v\n", csr)
 
 			keyPair, err = certer.GenCert(csr)
 		default:
@@ -85,7 +95,7 @@ func (ctr *certer) addTLSSecrets(ing *v1beta1.Ingress) (*v1beta1.Ingress, error)
 			return nil, fmt.Errorf("error getting raw certificate for secret %s: %s", tls.SecretName, err)
 		}
 
-		glog.V(5).Info(keyPair.Public)
+		logger.Debug(keyPair.Public)
 
 		sec.Data["tls.key"] = keyPair.Private
 		sec.Data["tls.crt"] = keyPair.Public
@@ -93,10 +103,10 @@ func (ctr *certer) addTLSSecrets(ing *v1beta1.Ingress) (*v1beta1.Ingress, error)
 
 		if newSec {
 			op = "creating"
-			sec, err = ctr.api.Secrets(ing.Namespace).Create(sec)
+			sec, err = ctr.api.Secrets(namespace).Create(sec)
 		} else {
 			op = "updating"
-			sec, err = ctr.api.Secrets(ing.Namespace).Update(sec)
+			sec, err = ctr.api.Secrets(namespace).Update(sec)
 		}
 
 		if err != nil {

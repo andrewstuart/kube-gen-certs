@@ -4,12 +4,12 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"flag"
-	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"strings"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
 
 	"astuart.co/vpki"
 
@@ -27,21 +27,24 @@ var (
 	forceTLS   = flag.Bool("forcetls", false, "force all ingresses to use TLS if certs can be obtained")
 	role       = flag.String("vault-role", "vault", "the vault role to use when obtaining certs")
 	selfSigned = flag.Bool("self-signed", false, "self-sign all certificates")
+	certNS     = flag.String("cert-namespace", "", "the namespace in which certificates should be created")
 )
 
 func init() {
 	flag.Parse()
+	log.SetFormatter(&log.JSONFormatter{})
 }
 
 type certer struct {
-	c   vpki.Certifier
-	api *kubernetes.Clientset
+	c         vpki.Certifier
+	api       *kubernetes.Clientset
+	namespace string
 }
 
 func main() {
 	var config *rest.Config
 
-	log.Println(*ttl, *inCluster)
+	log.Printf("TTL: %s, inCluster: %t", *ttl, *inCluster)
 
 	if *inCluster {
 		var err error
@@ -71,6 +74,7 @@ func main() {
 	}
 
 	log.Println(os.Getenv("ROOT_CA"))
+
 	if os.Getenv("ROOT_CA") != "" {
 		cp := x509.NewCertPool()
 		cp.AppendCertsFromPEM([]byte(os.Getenv("ROOT_CA")))
@@ -86,7 +90,7 @@ func main() {
 	if !*selfSigned {
 		switch {
 		case os.Getenv("VAULT_TOKEN") != "":
-			log.Println("Token:", os.Getenv("VAULT_TOKEN"))
+			log.Debug("Token:", os.Getenv("VAULT_TOKEN"))
 			vc.SetToken(strings.TrimSpace(os.Getenv("VAULT_TOKEN")))
 		default:
 			bs, err := ioutil.ReadFile("~/.vault-token")
@@ -103,10 +107,18 @@ func main() {
 	}
 
 	if !*selfSigned {
-		ctr = &certer{c: vc, api: cli}
+		ctr = &certer{
+			c:   vc,
+			api: cli,
+		}
 	} else {
-		ctr = &certer{c: &vpki.RawMarshaler{&SelfSigner{ttl}}, api: cli}
+		ctr = &certer{
+			c:   &vpki.RawMarshaler{RawCertifier: &SelfSigner{ttl}},
+			api: cli,
+		}
 	}
+
+	ctr.namespace = *certNS
 
 	go ctr.watchIng()
 
@@ -121,7 +133,6 @@ func main() {
 		}
 
 		for _, n := range ns.Items {
-			fmt.Println("Namespace", n.Name)
 			i := cli.Ingresses(n.Name)
 
 			li, err := i.List(v1.ListOptions{})
@@ -132,12 +143,12 @@ func main() {
 			for _, ing := range li.Items {
 				_, err := ctr.addTLSSecrets(&ing)
 				if err != nil {
-					log.Println(err)
+					log.WithFields(log.Fields{
+						"ingress":   ing.Name,
+						"namespace": ing.Namespace,
+					}).Println(err)
 				}
 			}
-
-			//LF
-			fmt.Println()
 		}
 	}
 }
