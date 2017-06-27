@@ -4,6 +4,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"fmt"
+	"strings"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
@@ -21,11 +22,17 @@ const (
 func (ctr *certer) addTLSSecrets(ing *v1beta1.Ingress) (*v1beta1.Ingress, error) {
 	annotAllows := len(ing.Spec.TLS) > 0 && ing.Annotations[GenCertsAnnotation] != ""
 
+	log.Info(ing.Spec.TLS)
+	log.Info(ing.Annotations[GenCertsAnnotation])
+
 	if !(annotAllows || *forceTLS) {
 		return nil, fmt.Errorf("No ingress to update")
 	}
 
-	fmt.Println(ing.Name)
+	log.WithFields(log.Fields{
+		"ingress":   fmt.Sprintf("%s/%s", ing.Namespace, ing.Name),
+		"namespace": ing.Namespace,
+	}).Infof("Issuing certificates for %s", ing.Name)
 
 	err := ctr.addNeededHosts(ing)
 	if err != nil {
@@ -41,7 +48,7 @@ func (ctr *certer) addTLSSecrets(ing *v1beta1.Ingress) (*v1beta1.Ingress, error)
 		var newSec bool
 
 		namespace := ctr.namespace
-		if namespace == "" {
+		if strings.TrimSpace(namespace) == "" {
 			namespace = ing.Namespace
 		}
 
@@ -53,7 +60,7 @@ func (ctr *certer) addTLSSecrets(ing *v1beta1.Ingress) (*v1beta1.Ingress, error)
 
 		sec, err = ctr.api.Secrets(namespace).Get(tls.SecretName)
 		if err != nil {
-			logger.Errorf("Error getting secret; creating new secret: %s", err)
+			logger.Infof("secret %q not found; creating new secret", tls.SecretName)
 
 			newSec = true
 			sec = &v1.Secret{

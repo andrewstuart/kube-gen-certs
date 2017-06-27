@@ -6,6 +6,8 @@ import (
 	"flag"
 	"io/ioutil"
 	"os"
+	"os/user"
+	"path"
 	"strings"
 	"time"
 
@@ -23,6 +25,7 @@ import (
 
 var (
 	inCluster  = flag.Bool("incluster", false, "the client is running inside a kuberenetes cluster")
+	host       = flag.String("host", "http://localhost:8001", "The host API server to connect to")
 	ttl        = flag.String("ttl", "240h", "the time to live for certificates")
 	forceTLS   = flag.Bool("forcetls", false, "force all ingresses to use TLS if certs can be obtained")
 	role       = flag.String("vault-role", "vault", "the vault role to use when obtaining certs")
@@ -54,7 +57,7 @@ func main() {
 		}
 	} else {
 		config = &rest.Config{
-			Host: "http://desk.astuart.co:8080",
+			Host: *host,
 		}
 	}
 
@@ -93,7 +96,11 @@ func main() {
 			log.Debug("Token:", os.Getenv("VAULT_TOKEN"))
 			vc.SetToken(strings.TrimSpace(os.Getenv("VAULT_TOKEN")))
 		default:
-			bs, err := ioutil.ReadFile("~/.vault-token")
+			u, err := user.Current()
+			if err != nil {
+				log.Fatal(err)
+			}
+			bs, err := ioutil.ReadFile(path.Join(u.HomeDir, ".vault-token"))
 			if err != nil {
 				log.Fatal(err)
 			}
