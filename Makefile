@@ -11,7 +11,7 @@ $(IMAGE): *.go
 
 build: $(IMAGE)
 	-upx $(IMAGE)
-	docker build . -t $(TAG)
+	docker build --pull . -t $(TAG)
 
 push: build
 	docker push $(TAG)
